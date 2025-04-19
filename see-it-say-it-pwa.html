@@ -1,0 +1,155 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>See It, Say It!</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#4CAF50"/>
+  <link rel="manifest" href="manifest.json">
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.9.0"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      padding: 20px;
+    }
+    #main {
+      display: none;
+    }
+    video, canvas {
+      margin-top: 10px;
+      max-width: 100%;
+      height: auto;
+    }
+    #controls {
+      margin-top: 10px;
+    }
+    .logo {
+      font-size: 24px;
+      font-weight: bold;
+      color: #4CAF50;
+      margin-bottom: 10px;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="language-screen">
+    <div class="logo">🧠 See It, Say It! 🔊</div>
+    <h2>اختار اللغة / Choose Language</h2>
+    <button onclick="startApp('ar-SA')">ابدأ بالعربي</button>
+    <button onclick="startApp('en-US')">Start in English</button>
+  </div>
+
+  <div id="main">
+    <video id="webcam" autoplay muted playsinline width="640" height="480"></video>
+    <canvas id="canvas" width="640" height="480"></canvas>
+    <div id="controls">
+      <button onclick="toggleMute()">
+        🔇 كتم / Unmute
+      </button>
+      <button onclick="resetSpeech()">
+        🔁 إعادة النطق
+      </button>
+    </div>
+  </div>
+
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('service-worker.js')
+        .then(() => console.log('Service Worker Registered'));
+    }
+
+    let selectedLang = "en-US";
+    let mute = false;
+    let spokenObjects = new Set();
+    let lastAnnouncementTime = Date.now();
+
+    function speak(text) {
+      if (!mute) {
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = selectedLang;
+        utterance.rate = 1;
+        speechSynthesis.speak(utterance);
+      }
+    }
+
+    function toggleMute() {
+      mute = !mute;
+      alert(mute ? "🛑 الصوت اتكتم" : "✅ الصوت رجع");
+    }
+
+    function resetSpeech() {
+      spokenObjects.clear();
+      speak(selectedLang === "ar-SA" ? "هبدأ من جديد" : "Starting fresh");
+    }
+
+    function startApp(lang) {
+      selectedLang = lang;
+      document.getElementById("language-screen").style.display = "none";
+      document.getElementById("main").style.display = "block";
+      setup();
+    }
+
+    async function setup() {
+      const video = document.getElementById('webcam');
+      const canvas = document.getElementById('canvas');
+      const ctx = canvas.getContext('2d');
+      const model = await cocoSsd.load();
+
+      navigator.mediaDevices.getUserMedia({ video: true }).then((stream) => {
+        video.srcObject = stream;
+      });
+
+      video.addEventListener('loadeddata', () => {
+        detectFrame();
+      });
+
+      async function detectFrame() {
+        const predictions = await model.detect(video);
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        let counts = {};
+        predictions.forEach(pred => {
+          if (pred.score > 0.5) {
+            const obj = pred.class;
+            counts[obj] = (counts[obj] || 0) + 1;
+
+            ctx.strokeStyle = "#00FF00";
+            ctx.lineWidth = 2;
+            ctx.strokeRect(...pred.bbox);
+            ctx.fillStyle = "#00FF00";
+            ctx.font = "14px Arial";
+            const time = new Date().toLocaleTimeString();
+            ctx.fillText(`${obj} (${Math.round(pred.score * 100)}%) - ${time}`, pred.bbox[0], pred.bbox[1] > 20 ? pred.bbox[1] - 5 : 10);
+          }
+        });
+
+        const now = Date.now();
+        if (now - lastAnnouncementTime >= 5000) {
+          let toSpeak = [];
+          for (const obj in counts) {
+            if (!spokenObjects.has(obj)) {
+              let phrase = "";
+              if (selectedLang === "ar-SA") {
+                phrase = `معاذ، شايف ${counts[obj]} ${obj}`;
+              } else {
+                phrase = `Moaz, I see ${counts[obj]} ${obj}${counts[obj] > 1 ? "s" : ""}`;
+              }
+              toSpeak.push(phrase);
+              spokenObjects.add(obj);
+            }
+          }
+          toSpeak.forEach(phrase => speak(phrase));
+          lastAnnouncementTime = now;
+        }
+
+        requestAnimationFrame(detectFrame);
+      }
+    }
+  </script>
+</body>
+</html>

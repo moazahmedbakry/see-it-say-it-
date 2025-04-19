@@ -1,0 +1,15 @@
+
+{
+  "name": "See It, Say It!",
+  "short_name": "SeeItSayIt",
+  "start_url": "see-it-say-it-pwa.html",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "description": "Object detection and voice assistant for accessibility.",
+  "theme_color": "#4CAF50",
+  "icons": [{
+    "src": "icon.png",
+    "sizes": "192x192",
+    "type": "image/png"
+  }]
+}
